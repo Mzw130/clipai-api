@@ -1,0 +1,39 @@
+version: '3.9'
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: clipai-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root_clipai_pass
+      MYSQL_DATABASE: clipai
+      MYSQL_USER: clipai
+      MYSQL_PASSWORD: clipai_pass
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysqldata:/var/lib/mysql
+      - ./src/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-u', 'clipai', '--password=clipai_pass']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: clipai-redis
+    ports:
+      - '6379:6379'
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysqldata:
+  redisdata:
