@@ -1,4 +1,6 @@
 import dotenv from 'dotenv';
+import path from 'path';
+
 dotenv.config();
 
 export const config = {
@@ -6,6 +8,9 @@ export const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10),
   host: process.env.HOST || '0.0.0.0',
+  dataDir: process.env.DATA_DIR || path.join(process.cwd(), 'data'),
+  // 视频生成结果额外输出目录（桌面等方便查看的位置）
+  videoOutputDir: process.env.VIDEO_OUTPUT_DIR || '',
 
   // 数据库
   database: {
@@ -26,6 +31,14 @@ export const config = {
     sdApiKey: process.env.SD_API_KEY || '',
     insightfaceEndpoint: process.env.INSIGHTFACE_ENDPOINT || '',
     rembgEndpoint: process.env.REMBG_ENDPOINT || '',
+    // Seedance 视频生成
+    seedanceEndpoint: process.env.SEEDANCE_ENDPOINT || '',
+    seedanceApiKey: process.env.SEEDANCE_API_KEY || '',
+    seedanceModel: process.env.SEEDANCE_MODEL || 'seedance-1.0-pro',
+    // Seedream 图片生成
+    seedreamEndpoint: process.env.SEEDREAM_ENDPOINT || '',
+    seedreamApiKey: process.env.SEEDREAM_API_KEY || '',
+    seedreamModel: process.env.SEEDREAM_MODEL || 'doubao-seedream-5.0-lite',
   },
 
   // 对象存储

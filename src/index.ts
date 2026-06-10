@@ -10,6 +10,9 @@ import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import { config } from './config';
 import { Redis } from 'ioredis';
+import path from 'path';
+import { existsSync, createReadStream } from 'fs';
+import { mkdir, stat } from 'fs/promises';
 
 // 路由
 import authRoutes from './routes/auth';
@@ -69,6 +72,40 @@ async function buildApp() {
       files: 2, // 最多 2 个文件 (image + mask)
     },
   });
+
+  // --- 静态文件服务 (本地开发存储) ---
+  const dataDir = path.resolve(config.dataDir);
+  await mkdir(dataDir, { recursive: true });
+
+  // 自定义静态文件路由
+  fastify.get('/files/*', async (request, reply) => {
+    try {
+      const filePath = path.join(dataDir, (request.params as any)['*']);
+      // 安全检查：防止目录穿越
+      if (!filePath.startsWith(dataDir)) {
+        return reply.status(403).send('Forbidden');
+      }
+      if (!existsSync(filePath)) {
+        return reply.status(404).send('File not found');
+      }
+      const fileStat = await stat(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4',
+        '.mov': 'video/quicktime', '.webm': 'video/webm',
+      };
+      return reply
+        .header('Content-Type', mimeTypes[ext] || 'application/octet-stream')
+        .header('Content-Length', fileStat.size)
+        .header('Cache-Control', 'public, max-age=31536000, immutable')
+        .send(createReadStream(filePath));
+    } catch {
+      return reply.status(404).send('File not found');
+    }
+  });
+
+  fastify.log.info(`📁 静态文件服务: ${dataDir}`);
 
   // --- Rate Limit ---
   await fastify.register(rateLimit, {
@@ -162,7 +199,7 @@ async function start() {
     fastify.log.info(`  健康: http://${config.host}:${config.port}/api/health`);
     fastify.log.info('='.repeat(50));
   } catch (err) {
-    fastify.log.error('启动失败:', err);
+    fastify.log.error(err, '启动失败');
     process.exit(1);
   }
 }

@@ -11,6 +11,8 @@ import { authGuard, proGuard } from '../middleware/auth';
 import { validateBody } from '../middleware/validator';
 import { enhanceImage, getTaskStatus, EnhanceRequest } from '../services/ai/pipeline';
 import { getAllToolTypes } from '../services/ai/prompts';
+import { db, schema } from '../db';
+import { eq, and } from 'drizzle-orm';
 import { success, error, ErrorCode } from '../utils/response';
 import { AppError } from '../utils/errors';
 import { getSubscriptionStatus } from '../services/payment';
@@ -48,33 +50,25 @@ export default async function aiRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/api/v1/ai/enhance', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // 解析 multipart/form-data
-      const data = await request.file();
-      if (!data) {
-        return reply.status(400).send(error(ErrorCode.PARAM_ERROR, '请上传图片'));
-      }
-
-      // 读取图片
-      const imageBuffer = await data.toBuffer();
-      const imageFileName = data.filename || 'image.png';
-      const imageMimeType = data.mimetype || 'image/png';
-
-      // 解析其他字段
-      const fields = data.fields || {};
-
-      // tool_type 可能在 fields 中，也可能在其他 parts 中
+      let imageBuffer: Buffer | undefined;
+      let imageFileName = 'image.png';
+      let imageMimeType = 'image/png';
       let toolType = '';
       let params: Record<string, unknown> = {};
       let webhookUrl: string | undefined;
       let maskBuffer: Buffer | undefined;
       let maskFileName: string | undefined;
 
-      // 继续读取后续 parts
       const parts = request.parts();
       for await (const part of parts) {
         if (part.type === 'file') {
-          if (part.fieldname === 'mask') {
-            maskBuffer = await part.toBuffer();
+          const buf = await part.toBuffer();
+          if (part.fieldname === 'image') {
+            imageBuffer = buf;
+            imageFileName = part.filename || 'image.png';
+            imageMimeType = part.mimetype || 'image/png';
+          } else if (part.fieldname === 'mask') {
+            maskBuffer = buf;
             maskFileName = part.filename || 'mask.png';
           }
         } else if (part.type === 'field') {
@@ -83,19 +77,11 @@ export default async function aiRoutes(fastify: FastifyInstance) {
               toolType = String(part.value);
               break;
             case 'params': {
-              try {
-                params = JSON.parse(String(part.value));
-              } catch {
-                params = {};
-              }
+              try { params = JSON.parse(String(part.value)); } catch { params = {}; }
               break;
             }
             case 'mask_coordinates': {
-              try {
-                params.mask_coordinates = JSON.parse(String(part.value));
-              } catch {
-                /* ignore */
-              }
+              try { params.mask_coordinates = JSON.parse(String(part.value)); } catch {}
               break;
             }
             case 'webhook_url':
@@ -105,19 +91,8 @@ export default async function aiRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // 如果 tool_type 在 fields 中定义
-      if (!toolType && fields.tool_type) {
-        toolType = String(fields.tool_type);
-      }
-      if (!params && fields.params) {
-        try {
-          params = JSON.parse(String(fields.params));
-        } catch {
-          /* ignore */
-        }
-      }
-      if (fields.webhook_url) {
-        webhookUrl = String(fields.webhook_url);
+      if (!imageBuffer) {
+        return reply.status(400).send(error(ErrorCode.PARAM_ERROR, '请上传图片'));
       }
 
       // 校验 tool_type
@@ -193,7 +168,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/v1/ai/status/:taskId
-   * 查询 AI 任务状态
+   * 查询 AI 任务状态（基于素材库：有素材 = 已完成）
    */
   fastify.get(
     '/api/v1/ai/status/:taskId',
@@ -203,18 +178,69 @@ export default async function aiRoutes(fastify: FastifyInstance) {
     ) => {
       try {
         const { taskId } = request.params;
-        const status = await getTaskStatus(taskId);
+        const userId = request.userId!;
 
-        if (!status) {
+        // 优先查素材库：有素材记录 = 生成成功
+        const [material] = await db
+          .select({
+            id: schema.materials.id,
+            url: schema.materials.url,
+            type: schema.materials.type,
+            createdAt: schema.materials.createdAt,
+          })
+          .from(schema.materials)
+          .where(
+            and(
+              eq(schema.materials.taskId, taskId),
+              eq(schema.materials.userId, userId),
+            ),
+          )
+          .limit(1);
+
+        if (material) {
+          return reply.send(
+            success({
+              task_id: taskId,
+              status: 'completed',
+              result_url: material.url,
+              type: material.type,
+              error_message: null,
+            }),
+          );
+        }
+
+        // 素材库没有 → 查任务表看是否失败
+        const [task] = await db
+          .select({
+            status: schema.tasks.status,
+            errorMessage: schema.tasks.errorMessage,
+          })
+          .from(schema.tasks)
+          .where(eq(schema.tasks.id, taskId))
+          .limit(1);
+
+        if (!task) {
           return reply.status(404).send(error(ErrorCode.PARAM_ERROR, '任务不存在'));
         }
 
+        if (task.status === 'failed') {
+          return reply.send(
+            success({
+              task_id: taskId,
+              status: 'failed',
+              result_url: null,
+              error_message: task.errorMessage || '处理失败',
+            }),
+          );
+        }
+
+        // 仍在处理中
         return reply.send(
           success({
-            task_id: status.taskId,
-            status: status.status,
-            result_url: status.resultUrl || null,
-            error_message: status.errorMessage || null,
+            task_id: taskId,
+            status: 'processing',
+            result_url: null,
+            error_message: null,
           }),
         );
       } catch (err) {

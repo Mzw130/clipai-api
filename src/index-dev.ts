@@ -121,7 +121,7 @@ async function start() {
         }
       }
 
-      const validTools = ['reshape','hd_repair','obj_remove','bg_remove','super_realistic','hair_dye','lip_plump','jawline','hair_smooth','hair_repair','proportion','leg_enhance','muscle','muscle_enhance','ai_edit','beauty','color_grade','filter'];
+      const validTools = ['reshape','hd_repair','obj_remove','bg_remove','super_realistic','hair_dye','lip_plump','jawline','hair_smooth','hair_repair','proportion','leg_enhance','muscle','muscle_enhance','ai_edit','beauty','color_grade','filter','video_generate','seedance_video'];
       if (!toolType || !validTools.includes(toolType)) {
         return reply.status(400).send(err(1001, `无效的 tool_type: ${toolType}`));
       }
@@ -156,6 +156,46 @@ async function start() {
     const task = DB.tasks.find(t => t.id === (req.params as any).taskId);
     if (!task) return reply.status(404).send(err(1001, '任务不存在'));
     return reply.send(ok({ task_id: task.id, status: task.status, result_url: task.resultUrl, error_message: null }));
+  });
+
+  // ==================== 视频生成 (Dev Mock) ====================
+  fastify.post('/api/v1/ai/video', async (req, reply) => {
+    try {
+      const userId = (req as any).userId;
+      const data = await req.file();
+      if (!data) return reply.status(400).send(err(1001, '请上传图片'));
+
+      const buffer = await data.toBuffer();
+      const fields = req.body as any || {};
+      const prompt = fields.prompt || '';
+      const mode = fields.mode || 'super';
+
+      // Mock: 模拟视频生成
+      const taskId = uuidv4();
+      const videoUrl = `http://localhost:3000/files/videos/${userId}/${taskId}.mp4`;
+
+      const task = {
+        id: taskId, userId, toolType: 'video_generate',
+        status: 'completed', originalUrl: '',
+        resultUrl: videoUrl, processingTimeMs: 8000,
+        creditsUsed: 8, createdAt: new Date().toISOString(),
+      };
+      DB.tasks.push(task);
+
+      // 录入素材
+      DB.materials.push({
+        id: uuidv4(), userId, type: 'video', url: videoUrl,
+        toolType: 'video_generate', taskId, isFavorite: false,
+        tags: [], createdAt: new Date().toISOString(),
+      });
+
+      return reply.send(ok({
+        task_id: task.id, status: 'completed', result_url: task.resultUrl,
+        processing_time_ms: task.processingTimeMs, credits_used: task.creditsUsed,
+      }));
+    } catch (e: any) {
+      return reply.status(500).send(err(5000, e.message));
+    }
   });
 
   // ==================== 素材库 ====================

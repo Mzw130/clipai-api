@@ -13,6 +13,8 @@ const pool = mysql.createPool({
   connectionLimit: 20,
   queueLimit: 0,
   charset: 'utf8mb4',
+  // MySQL 8.0: 允许公钥检索 + 宽松 SSL
+  ssl: { rejectUnauthorized: false },
 });
 
 export const db = drizzle(pool, { schema, mode: 'default' });

@@ -140,17 +140,19 @@ Subject must remain fully intact with original colors and lighting.`,
     creditCost: 1,
   },
 
-  // ==================== 5. 超级写实 (super_realistic) ====================
+  // ==================== 5. 超级写实 (super_realistic → Seedream) ====================
   super_realistic: {
     toolType: 'super_realistic',
-    modelName: 'SDXL + Photo-Real LoRA',
-    replicateModel: 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
-    basePrompt: `Transform this image into a hyper-realistic photograph.
-Enhance every detail: skin texture with visible pores, realistic lighting with natural shadows,
-sharp details in eyes with natural reflections, individual hair strands with natural flow.
-Make the subject look like a professional DSLR portrait photograph.
-8K resolution, ultra-detailed, photorealistic, natural skin texture.`,
-    negativePrompt: BODY_NEGATIVE + ', painting, illustration, cartoon, cgi, artificial, plastic skin',
+    modelName: 'Seedream 5.0 Lite (火山引擎)',
+    basePrompt: `{prompt_instruction}`,
+    negativePrompt: '低质量, 模糊, 变形, 失真, 水印, 卡通, 插画',
+    defaultParams: {
+      prompt: '将这张图片转化为超写实风格，皮肤纹理清晰可见，自然光线和阴影，专业级摄影品质',
+      size: '2048x2048',
+    },
+    estimatedSeconds: 15,
+    creditCost: 3,
+  },
     defaultParams: {},
     estimatedSeconds: 10,
     creditCost: 2,
@@ -310,17 +312,19 @@ Professional fitness photography quality. 8K photorealistic.`,
     creditCost: 2,
   },
 
-  // ==================== 15. AI 编辑 (ai_edit) ====================
+  // ==================== 15. AI 编辑 (ai_edit → Seedream) ====================
   ai_edit: {
     toolType: 'ai_edit',
-    modelName: 'Stable Diffusion img2img / SDXL',
-    replicateModel: 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
-    basePrompt: `Edit this image according to the following instruction: {prompt}.
-Apply the requested changes while preserving all other aspects of the image.
-Maintain natural lighting, consistent style, and photorealistic quality.
-The edit should be seamlessly integrated — no visible seams or artifacts.
-Original image quality and resolution preserved. 8K detailed output.`,
-    negativePrompt: BODY_NEGATIVE + ', low quality, blurry, distortion, artifacts, watermark',
+    modelName: 'Seedream 5.0 Lite (火山引擎)',
+    basePrompt: `{prompt_instruction}`,
+    negativePrompt: '低质量, 模糊, 变形, 失真, 水印, 拼接痕迹',
+    defaultParams: {
+      prompt: '编辑这张图片，保持自然光线和风格一致性',
+      size: '2048x2048',
+    },
+    estimatedSeconds: 15,
+    creditCost: 3,
+  },
     defaultParams: {
       prompt: '',
     },
@@ -378,22 +382,49 @@ Artistic, visually appealing result with consistent style application.`,
     creditCost: 1,
   },
 
-  // ==================== 视频: 图生视频 (video_generate) ====================
+  // ==================== 图片: AI 生图 (seedream_image → Seedream) ====================
+  seedream_image: {
+    toolType: 'seedream_image',
+    modelName: 'Seedream 5.0 Lite (火山引擎)',
+    basePrompt: `{prompt_instruction}`,
+    negativePrompt: '低质量, 模糊, 变形, 失真, 水印',
+    defaultParams: {
+      prompt: '',
+      size: '2048x2048',
+    },
+    estimatedSeconds: 15,
+    creditCost: 3,
+  },
+
+  // ==================== 视频: 图生视频 (video_generate → Seedance) ====================
   video_generate: {
     toolType: 'video_generate',
-    modelName: 'Stable Video Diffusion / AnimateDiff',
-    replicateModel: 'stability-ai/stable-video-diffusion:3f0457e4619bcacd03a07ae4c2b4b7c4bd8b8b2b2b2b2b2b2b2b2b2b2b2b2b',
-    basePrompt: `Generate a short video from this image. {prompt_instruction}
-Mode: {mode}. Smooth motion, consistent subject appearance, no flickering.
-Maintain the original image's aesthetic and quality throughout the video.
-Seamless looping potential. High quality video output.`,
-    negativePrompt: 'flickering, inconsistent frames, morphing, distortion, low quality, jittery motion',
+    modelName: 'Seedance 1.5 Pro (火山引擎)',
+    basePrompt: `{prompt_instruction}`,
+    negativePrompt: '闪烁, 画面跳变, 变形, 失真, 低质量, 抖动',
     defaultParams: {
       mode: 'super',
       prompt: '',
     },
-    estimatedSeconds: 30,
-    creditCost: 5,
+    estimatedSeconds: 90,
+    creditCost: 8,
+    isVideo: true,
+  },
+
+  // ==================== 视频: Seedance 图生视频（火山引擎/豆包） ====================
+  seedance_video: {
+    toolType: 'seedance_video',
+    modelName: 'Seedance 1.5 Pro (ByteDance/火山引擎)',
+    basePrompt: `{prompt_instruction}`,
+    negativePrompt: '闪烁, 画面跳变, 变形, 失真, 低质量, 抖动, 不自然的运动',
+    defaultParams: {
+      mode: 'super',
+      prompt: '',
+      ratio: 'adaptive',
+      generate_audio: true,
+    },
+    estimatedSeconds: 90,
+    creditCost: 8,
     isVideo: true,
   },
 };
@@ -453,12 +484,12 @@ function resolveSpecialPlaceholders(template: string, params: Record<string, unk
     template = template.replace('{action_instruction}', action);
   }
 
-  // {prompt_instruction} — video_generate 的动态指令
+  // {prompt_instruction} — video_generate / seedance_video 的动态指令
   if (template.includes('{prompt_instruction}')) {
     const prompt = params.prompt as string;
     template = template.replace(
       '{prompt_instruction}',
-      prompt ? `Additional instruction: ${prompt}.` : 'Smooth camera movement with subtle parallax effect.',
+      prompt ? prompt : '镜头缓缓推进，画面自然流畅，光线柔和，高质量视频。',
     );
   }
 

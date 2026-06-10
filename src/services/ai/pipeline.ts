@@ -21,6 +21,8 @@ import { getToolPromptConfig, renderPrompt } from './prompts';
 import { callModel, callSpecialModel, ImageGenerationInput } from './models';
 import { uploadToOSS, downloadFileToBuffer } from '../storage';
 import { config } from '../../config';
+import fs from 'fs/promises';
+import path from 'path';
 import {
   AIError,
   AITimeoutError,
@@ -269,7 +271,21 @@ async function processTaskAsync(
     const resultExt = toolConfig.isVideo ? 'mp4' : 'png';
     const resultKey = `results/${userId}/${taskId}.${resultExt}`;
     const resultBuffer = await fetchResultAsBuffer(result.urls[0], toolConfig.isVideo);
-    const resultUrl = await uploadToOSS(resultKey, resultBuffer, 'image/png');
+    const resultUrl = await uploadToOSS(resultKey, resultBuffer, toolConfig.isVideo ? 'video/mp4' : 'image/png');
+
+    // 视频结果额外输出到桌面/指定目录
+    if (toolConfig.isVideo && config.videoOutputDir) {
+      try {
+        await fs.mkdir(config.videoOutputDir, { recursive: true });
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const outputFileName = `ClipAI_${request.toolType}_${timestamp}.mp4`;
+        const outputPath = path.join(config.videoOutputDir, outputFileName);
+        await fs.writeFile(outputPath, resultBuffer);
+        console.log(`[Pipeline] 视频已输出: ${outputPath}`);
+      } catch (err) {
+        console.error('[Pipeline] 视频输出到桌面失败:', err);
+      }
+    }
 
     await db.update(schema.tasks).set({
       status: 'completed',
@@ -288,6 +304,14 @@ async function processTaskAsync(
       url: resultUrl,
       toolType: request.toolType,
       taskId,
+      sizeBytes: resultBuffer.length,
+    });
+
+    console.log(`[Pipeline] 异步任务 ${taskId} 完成:`, {
+      resultUrl,
+      type: toolConfig.isVideo ? 'video' : 'image',
+      sizeBytes: resultBuffer.length,
+      processingTimeMs: Date.now() - startTime,
     });
 
     if (request.webhookUrl) {
@@ -295,6 +319,8 @@ async function processTaskAsync(
     }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'AI 处理失败';
+    console.error(`[Pipeline] 异步任务 ${taskId} 失败:`, errorMessage,
+      error instanceof Error ? error.stack : error);
     await db.update(schema.tasks).set({
       status: 'failed',
       errorMessage,
@@ -317,9 +343,13 @@ async function executeAITask(
   const mergedParams = { ...toolConfig.defaultParams, ...params };
   const renderedPrompt = renderPrompt(toolConfig.basePrompt, mergedParams);
 
-  const specialModels = ['bg_remove', 'hd_repair'] as const;
+  const specialModels = ['bg_remove', 'hd_repair', 'video_generate', 'seedance_video', 'seedream_image', 'super_realistic', 'ai_edit', 'color_grade', 'filter'] as const;
   if ((specialModels as readonly string[]).includes(toolType)) {
-    return callSpecialModel(toolType as 'bg_remove' | 'hd_repair', originalUrl, mergedParams) as Promise<{ urls: string[] }>;
+    return callSpecialModel(
+      toolType as any,
+      originalUrl,
+      mergedParams,
+    ) as Promise<{ urls: string[] }>;
   }
 
   const modelInput: ImageGenerationInput = {

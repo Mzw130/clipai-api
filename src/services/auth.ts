@@ -135,6 +135,64 @@ async function verifyCode(phone: string, code: string, redis?: Redis): Promise<b
 
 // ==================== 登录 / 注册 ====================
 
+/**
+ * 开发模式: 自动登录，无需验证码
+ */
+async function devAutoLogin(phone: string): Promise<LoginResult> {
+  let [user] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.phone, phone))
+    .limit(1);
+
+  if (!user) {
+    const newUserId = uuidv4();
+    await db.insert(schema.users).values({
+      id: newUserId,
+      phone,
+      nickname: `用户${phone.slice(-4)}`,
+      role: 'pro',          // 开发模式直接给 pro
+      credits: 9999,        // 给足积分
+      freeDailyUsed: 0,
+      freeDailyDate: new Date().toISOString().slice(0, 10),
+      lastLoginAt: new Date(),
+    });
+
+    const [createdUser] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, newUserId))
+      .limit(1);
+    user = createdUser;
+  } else {
+    await db
+      .update(schema.users)
+      .set({ lastLoginAt: new Date() })
+      .where(eq(schema.users.id, user.id));
+  }
+
+  const token = signToken({
+    userId: user.id,
+    phone: user.phone,
+    role: user.role,
+  });
+
+  console.log(`[DEV] 🔓 自动登录: ${phone}`);
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      phone: user.phone,
+      nickname: user.nickname,
+      avatarUrl: user.avatarUrl,
+      role: user.role,
+      credits: user.credits,
+      isNewUser: false,
+    },
+  };
+}
+
 export interface LoginResult {
   token: string;
   user: {
@@ -159,6 +217,12 @@ export async function loginWithCode(
   // 校验手机号格式
   if (!/^1[3-9]\d{9}$/.test(phone)) {
     throw new ParamError('手机号格式不正确');
+  }
+
+  // 开发模式: dev code 直接登录，跳过验证码校验
+  const isDev = config.env === 'development';
+  if (isDev && code === '123456') {
+    return await devAutoLogin(phone);
   }
 
   // 校验验证码
