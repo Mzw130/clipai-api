@@ -82,7 +82,7 @@ export const TOOL_PROMPTS: Record<string, ToolPromptConfig> = {
     basePrompt: `Professional full-body photo editing. {action_instruction}.
 Maintain natural skin tone, original clothing details, and background unchanged.
 Photorealistic result with natural lighting. High resolution 8K output.`,
-    negativePrompt: BODY_NEGATIVE + ', clothing change, background change, face change',
+    negativePrompt: `${BODY_NEGATIVE}, clothing change, background change, face change`,
     defaultParams: {
       sub_tool: 'leg_enhance',
       intensity: 50,
@@ -164,7 +164,7 @@ Only modify the hair area precisely — do NOT change the face, skin, eyes, clot
 Maintain the original hair texture, volume, shine, and natural lighting.
 The new color should blend naturally with the existing hair highlights and shadows.
 Result must look like the person naturally has this hair color. Photorealistic.`,
-    negativePrompt: FACE_NEGATIVE + ', skin color change, background change, unnatural hair texture, color bleeding',
+    negativePrompt: `${FACE_NEGATIVE}, skin color change, background change, unnatural hair texture, color bleeding`,
     defaultParams: {
       hair_color: 'pink',
     },
@@ -181,7 +181,7 @@ Keep the lips looking natural and proportional to the face.
 Maintain original lip color tone and texture. Do NOT change any other facial features.
 The result should look like a natural, subtle enhancement — not overdone or artificial.
 Preserve natural lip lines and moisture.`,
-    negativePrompt: FACE_NEGATIVE + ', overfilled lips, unnatural lip shape, duck lips, changed lip color, skin change',
+    negativePrompt: `${FACE_NEGATIVE}, overfilled lips, unnatural lip shape, duck lips, changed lip color, skin change`,
     defaultParams: {
       intensity: 0.3,
     },
@@ -198,7 +198,7 @@ Natural-looking facial contouring that enhances the jaw structure.
 Maintain facial identity, skin texture, and all other features EXACTLY as original.
 The enhancement should be subtle and natural — not distorting or unnatural.
 Preserve original lighting, skin tone, and expression.`,
-    negativePrompt: FACE_NEGATIVE + ', face shape change, distorted jaw, unnatural contour, different person',
+    negativePrompt: `${FACE_NEGATIVE}, face shape change, distorted jaw, unnatural contour, different person`,
     defaultParams: {
       intensity: 0.5,
     },
@@ -215,7 +215,7 @@ Make hair appear silky, glossy, and well-conditioned with natural shine.
 Maintain the exact original hair color, length, and overall style.
 Do NOT change face, skin, clothing, or background.
 Natural hair flow with healthy, smooth appearance. Photo-realistic result.`,
-    negativePrompt: BODY_NEGATIVE + ', hair color change, hair style change, face change, plastic hair, flat hair',
+    negativePrompt: `${BODY_NEGATIVE}, hair color change, hair style change, face change, plastic hair, flat hair`,
     defaultParams: {},
     estimatedSeconds: 6,
     creditCost: 1,
@@ -230,7 +230,7 @@ and uneven hair texture. Add natural volume, healthy shine, and smooth texture.
 Keep the exact original hair color, style, and length completely unchanged.
 Do NOT modify face, skin, clothing, or background.
 The hair should look healthy, vibrant, and well-nourished. Photorealistic.`,
-    negativePrompt: BODY_NEGATIVE + ', hair color change, hair style change, face change, too much volume',
+    negativePrompt: `${BODY_NEGATIVE}, hair color change, hair style change, face change, too much volume`,
     defaultParams: {},
     estimatedSeconds: 6,
     creditCost: 1,
@@ -245,7 +245,7 @@ Intensity level: {intensity}%. Maintain a completely natural, realistic look.
 Preserve clothing details, background, lighting, and facial features EXACTLY as original.
 The proportions should look natural and physically plausible.
 Professional photo editing quality. 8K photorealistic output.`,
-    negativePrompt: BODY_NEGATIVE + ', unnatural proportions, distorted body, clothing change, background change',
+    negativePrompt: `${BODY_NEGATIVE}, unnatural proportions, distorted body, clothing change, background change`,
     defaultParams: {
       ratio_type: 'leg_body',
       intensity: 50,
@@ -262,7 +262,7 @@ Professional photo editing quality. 8K photorealistic output.`,
 Maintain natural skin tone, texture, and lighting. Keep clothing and shoes unchanged.
 The result should look completely natural and proportional to the body.
 Preserve all other body parts, background, and image quality. Photorealistic.`,
-    negativePrompt: BODY_NEGATIVE + ', unnatural legs, distorted limbs, different skin tone, clothing change',
+    negativePrompt: `${BODY_NEGATIVE}, unnatural legs, distorted limbs, different skin tone, clothing change`,
     defaultParams: {
       mode: 'slim_leg',
       intensity: 50,
@@ -280,7 +280,7 @@ Maintain natural skin tone and body proportions. The muscles should look defined
 but realistic — not cartoonish or exaggerated.
 Keep face, clothing, background, and non-target body parts completely unchanged.
 Natural lighting and skin texture preserved. Photorealistic output.`,
-    negativePrompt: BODY_NEGATIVE + ', overdone muscles, cartoon muscles, skin color change, face change',
+    negativePrompt: `${BODY_NEGATIVE}, overdone muscles, cartoon muscles, skin color change, face change`,
     defaultParams: {
       body_part: 'abs',
       intensity: 50,
@@ -299,7 +299,7 @@ Maintain natural skin tone, realistic lighting, and body proportions.
 Keep face, background, and clothing completely unchanged.
 The result should look like a natural fitness transformation — realistic and believable.
 Professional fitness photography quality. 8K photorealistic.`,
-    negativePrompt: BODY_NEGATIVE + ', deformed, unnatural proportions, overly muscular, cartoonish, bodybuilder extremes on non-bodybuilder settings',
+    negativePrompt: `${BODY_NEGATIVE}, deformed, unnatural proportions, overly muscular, cartoonish, bodybuilder extremes on non-bodybuilder settings`,
     defaultParams: {
       style: 'athletic',
       intensity: 70,
@@ -333,7 +333,7 @@ IMPORTANT: Keep the person completely recognizable. Do NOT change face shape,
 facial features, or identity. The result must look like the same person with
 natural, subtle makeup and good lighting — NOT a different person or heavy filter.
 Professional beauty photography retouching quality. Natural skin texture preserved.`,
-    negativePrompt: FACE_NEGATIVE + ', different person, heavy makeup, plastic skin, face shape change, big eyes, whitening, unnatural beauty filter',
+    negativePrompt: `${FACE_NEGATIVE}, different person, heavy makeup, plastic skin, face shape change, big eyes, whitening, unnatural beauty filter`,
     defaultParams: {},
     estimatedSeconds: 4,
     creditCost: 1,

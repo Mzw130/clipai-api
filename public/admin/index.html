@@ -7,27 +7,638 @@
   <link rel="stylesheet" href="/admin/css/admin.css">
 </head>
 <body>
-  <div id="app">
-    <aside id="sidebar"></aside>
-    <div id="main-area">
-      <header id="topbar"></header>
-      <main id="content"></main>
-    </div>
-  </div>
-  <div id="toast-container"></div>
-  <div id="modal-overlay" class="hidden"></div>
 
-  <script src="/admin/js/api.js"></script>
-  <script src="/admin/js/components/toast.js"></script>
-  <script src="/admin/js/components/modal.js"></script>
-  <script src="/admin/js/components/table.js"></script>
-  <script src="/admin/js/components/sidebar.js"></script>
-  <script src="/admin/js/views/login.js"></script>
-  <script src="/admin/js/views/dashboard.js"></script>
-  <script src="/admin/js/views/users.js"></script>
-  <script src="/admin/js/views/tasks.js"></script>
-  <script src="/admin/js/views/subscriptions.js"></script>
-  <script src="/admin/js/views/models.js"></script>
-  <script src="/admin/js/router.js"></script>
+<!-- ==================== 登录页 ==================== -->
+<div id="login-container">
+  <div class="login-wrapper">
+    <div class="login-bg-shape"></div>
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect width="48" height="48" rx="12" fill="#8B5CF6" opacity="0.15"/>
+            <path d="M24 12L32 20L24 28L16 20L24 12Z" fill="#8B5CF6" opacity="0.6"/>
+            <path d="M24 28L32 20V32L24 36L16 32V20L24 28Z" fill="#8B5CF6"/>
+          </svg>
+        </div>
+        <h1>Clip<span>AI</span></h1>
+        <p>管理后台</p>
+      </div>
+      <div class="login-body">
+        <form id="login-form" class="login-form" onsubmit="return false">
+          <div class="input-group" id="phone-group">
+            <span class="input-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>
+            </span>
+            <input type="tel" id="phone-input" placeholder="手机号" maxlength="11" autocomplete="tel" value="13800138000">
+          </div>
+          <div class="input-group" id="code-group">
+            <span class="input-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </span>
+            <input type="text" id="code-input" placeholder="验证码 (开发环境: 123456)" maxlength="6" autocomplete="one-time-code" value="123456">
+            <button type="button" class="input-btn" id="send-code-btn">发送</button>
+          </div>
+          <button type="submit" class="login-btn" id="login-submit-btn" onclick="handleLogin()">
+            <span id="login-btn-text">登 录</span>
+            <svg id="login-spinner" class="spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          </button>
+        </form>
+      </div>
+      <div class="login-footer">
+        <p class="hint">开发环境默认验证码: <code>123456</code></p>
+      </div>
+    </div>
+    <p class="login-copyright">&copy; 2026 ClipAI — 仅供管理员使用</p>
+  </div>
+</div>
+
+<!-- ==================== 主界面 ==================== -->
+<div id="app" style="display:none">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div class="logo">Clip<span>AI</span></div>
+    <nav>
+      <a href="#dashboard" class="active" data-page="dashboard">
+        <span class="icon">📊</span> 仪表盘
+      </a>
+      <a href="#users" data-page="users">
+        <span class="icon">👥</span> 用户管理
+      </a>
+      <a href="#subscriptions" data-page="subscriptions">
+        <span class="icon">💎</span> 订阅管理
+      </a>
+      <a href="#tasks" data-page="tasks">
+        <span class="icon">⚡</span> 任务管理
+      </a>
+    </nav>
+    <div class="user-info">
+      <div id="current-user-phone"></div>
+      <span class="role" id="current-user-role">admin</span>
+    </div>
+    <button class="logout-btn" onclick="logout()">🚪 退出登录</button>
+  </div>
+
+  <!-- Main -->
+  <div id="main-area">
+    <div id="topbar" class="page-title">仪表盘</div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<!-- ==================== Modal ==================== -->
+<div id="modal-overlay" class="hidden">
+  <div class="modal-box" id="modal-content"></div>
+</div>
+
+<!-- ==================== Toast ==================== -->
+<div id="toast-container"></div>
+
+<script src="/admin/js/api.js"></script>
+<script>
+// ==================== 全局状态 ====================
+let currentPage = 'dashboard';
+let currentPhone = '';
+
+// ==================== Toast ====================
+function showToast(msg, type) {
+  type = type || 'info';
+  var container = document.getElementById('toast-container');
+  var el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(function() { el.remove(); }, 3000);
+}
+
+// ==================== 格式化 ====================
+function fmtTime(t) {
+  if (!t) return '-';
+  var d = new Date(t);
+  return d.toLocaleString('zh-CN', { hour12: false });
+}
+
+function fmtNum(n) {
+  if (n == null) return '-';
+  return Number(n).toLocaleString();
+}
+
+function roleBadge(role) {
+  var cls = role === 'admin' ? 'badge-admin' : role === 'pro' ? 'badge-pro' : 'badge-free';
+  var label = role === 'admin' ? '管理员' : role === 'pro' ? 'Pro' : '免费';
+  return '<span class="badge ' + cls + '">' + label + '</span>';
+}
+
+function statusBadge(status) {
+  var cls = 'badge-' + (status || 'pending');
+  return '<span class="badge ' + cls + '">' + status + '</span>';
+}
+
+// ==================== 登录 ====================
+var phoneInput = document.getElementById('phone-input');
+var codeInput = document.getElementById('code-input');
+var phoneGroup = document.getElementById('phone-group');
+var codeGroup = document.getElementById('code-group');
+var sendCodeBtn = document.getElementById('send-code-btn');
+var loginSubmitBtn = document.getElementById('login-submit-btn');
+var loginBtnText = document.getElementById('login-btn-text');
+var loginSpinner = document.getElementById('login-spinner');
+var loginForm = document.getElementById('login-form');
+var loginContainer = document.getElementById('login-container');
+
+phoneInput.addEventListener('input', function() {
+  // no-op
+});
+
+phoneInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); handleLogin(); }
+});
+
+codeInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); handleLogin(); }
+});
+
+// send-code 按钮事件在下方 handleLogin 定义之后绑定
+
+function setLoading(loading) {
+  loginSubmitBtn.disabled = loading;
+  loginBtnText.style.display = loading ? 'none' : '';
+  loginSpinner.style.display = loading ? 'inline-block' : 'none';
+}
+
+async function handleLogin() {
+  var phone = phoneInput.value.replace(/\s/g, '');
+  var code = codeInput.value.trim();
+  if (phone.length < 11) { showToast('请输入正确的手机号', 'error'); return; }
+  if (!code) { showToast('请输入验证码', 'error'); return; }
+  currentPhone = phone;
+  setLoading(true);
+  try {
+    var result = await AdminAPI.verifyCode(phone, code);
+    if (result && result.code === 0 && result.data && result.data.token) {
+      AdminAPI.setToken(result.data.token);
+      AdminAPI.setUser(result.data.user);
+      showMain();
+    } else {
+      throw new Error((result && result.message) || '登录失败');
+    }
+  } catch (e) {
+    showToast(e.message || '登录失败，请检查手机号和验证码', 'error');
+    loginForm.querySelector('.login-card').classList.add('shake');
+    setTimeout(function() { loginForm.querySelector('.login-card').classList.remove('shake'); }, 400);
+  }
+  setLoading(false);
+}
+
+sendCodeBtn.addEventListener('click', async function() {
+  var phone = phoneInput.value.replace(/\s/g, '');
+  if (phone.length < 11) { showToast('请输入手机号', 'error'); return; }
+  currentPhone = phone;
+  sendCodeBtn.disabled = true;
+  sendCodeBtn.textContent = '...';
+  try {
+    await AdminAPI.sendCode(phone);
+    showToast('验证码已发送（开发环境请用 123456）', 'success');
+  } catch (e) {
+    showToast(e.message || '发送失败', 'error');
+  }
+  sendCodeBtn.disabled = false;
+  sendCodeBtn.textContent = '发送';
+});
+
+phoneInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); handleLogin(); }
+});
+
+codeInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); handleLogin(); }
+});
+
+function showMain() {
+  loginContainer.style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  var user = AdminAPI.getUser();
+  if (user) {
+    document.getElementById('current-user-phone').textContent = user.phone || currentPhone;
+    document.getElementById('current-user-role').textContent = user.role === 'admin' ? '管理员' : user.role;
+  }
+  navigateTo('dashboard');
+  setupNav();
+}
+
+function setupNav() {
+  document.querySelectorAll('#sidebar nav a').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      navigateTo(this.dataset.page);
+    });
+  });
+
+  window.addEventListener('hashchange', function() {
+    var page = window.location.hash.replace('#/', '').replace('#', '') || 'dashboard';
+    navigateTo(page);
+  });
+}
+
+function navigateTo(page) {
+  currentPage = page;
+  document.querySelectorAll('#sidebar nav a').forEach(function(a) {
+    a.classList.toggle('active', a.dataset.page === page);
+  });
+  var titles = { dashboard: '仪表盘', users: '用户管理', subscriptions: '订阅管理', tasks: '任务管理' };
+  document.querySelector('#topbar').textContent = titles[page] || '';
+  window.location.hash = '#' + page;
+
+  if (page === 'dashboard') renderDashboard();
+  else if (page === 'users') renderUsers();
+  else if (page === 'subscriptions') renderSubscriptions();
+  else if (page === 'tasks') renderTasks();
+}
+
+function logout() {
+  AdminAPI.clearToken();
+  AdminAPI.clearUser();
+  currentPhone = '';
+  phoneInput.value = '';
+  codeInput.value = '';
+  loginContainer.style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ==================== 仪表盘 ====================
+async function renderDashboard() {
+  var content = document.getElementById('content');
+  content.innerHTML = '<div class="loading">加载中...</div>';
+  try {
+    var res = await AdminAPI.getStats();
+    var stats = res.data || {};
+    content.innerHTML = ''
+      + '<div class="stats-grid">'
+      + statCard('总用户', fmtNum(stats.totalUsers), 'primary')
+      + statCard('Pro 用户', fmtNum(stats.proUsers), 'gold')
+      + statCard('今日新增', fmtNum(stats.todayNewUsers), 'success')
+      + statCard('活跃用户', fmtNum(stats.activeUsers), '')
+      + statCard('今日任务', fmtNum(stats.todayTasks), 'primary')
+      + statCard('等待中', fmtNum(stats.pendingTasks), '')
+      + statCard('处理中', fmtNum(stats.processingTasks), '')
+      + statCard('已完成', fmtNum(stats.completedTasks), 'success')
+      + statCard('失败任务', fmtNum(stats.failedTasks), '')
+      + statCard('总素材', fmtNum(stats.totalMaterials), '')
+      + '</div>'
+      + '<div class="detail-panel"><h3>系统信息</h3>'
+      + '<div class="detail-grid">'
+      + detailItem('最后注册', stats.lastRegisteredUser || '-')
+      + detailItem('最后登录', stats.lastLoginAt ? fmtTime(stats.lastLoginAt) : '-')
+      + detailItem('系统时间', fmtTime(new Date().toISOString()))
+      + '</div></div>';
+  } catch (e) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>加载失败: ' + esc(e.message) + '</p></div>';
+  }
+}
+
+function statCard(label, value, colorClass) {
+  return '<div class="stats-card"><div class="label">' + esc(label) + '</div><div class="value' + (colorClass ? ' ' + colorClass : '') + '">' + esc(value) + '</div></div>';
+}
+
+function detailItem(label, value) {
+  return '<div class="detail-item"><div class="label">' + esc(label) + '</div><div class="value">' + esc(value) + '</div></div>';
+}
+
+// ==================== 用户管理 ====================
+var usersState = { page: 1, pageSize: 20, search: '', role: '', status: '', sortBy: 'created_at', sortOrder: 'desc' };
+
+async function renderUsers() {
+  var content = document.getElementById('content');
+  content.innerHTML = '<div class="loading">加载中...</div>';
+  try {
+    var res = await AdminAPI.listUsers(usersState);
+    var data = res.data || {};
+    var users = data.items || [];
+    var p = data.pagination || {};
+    content.innerHTML = ''
+      + '<div class="page-header"><h1>用户管理</h1></div>'
+      + '<div class="filters-bar">'
+      + '<input type="text" id="user-search" placeholder="搜索手机号/昵称..." value="' + escAttr(usersState.search) + '">'
+      + '<select id="user-role-filter"><option value="">全部角色</option><option value="admin">管理员</option><option value="pro">Pro</option><option value="free">免费</option></select>'
+      + '<select id="user-status-filter"><option value="">全部状态</option><option value="active">正常</option><option value="banned">已封禁</option></select>'
+      + '</div>'
+      + '<table class="data-table"><thead><tr>'
+      + th('手机号')
+      + th('昵称')
+      + th('角色')
+      + th('积分')
+      + th('状态')
+      + th('创建时间')
+      + th('最后登录')
+      + th('操作', false)
+      + '</tr></thead><tbody id="users-tbody"></tbody></table>'
+      + pagination(p.page, p.total_pages, 'users-page');
+
+    var tbody = document.getElementById('users-tbody');
+    if (users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">暂无数据</div></td></tr>';
+    } else {
+      tbody.innerHTML = users.map(function(u) {
+        return '<tr>'
+          + '<td>' + esc(u.phone) + '</td>'
+          + '<td>' + esc(u.nickname || '-') + '</td>'
+          + '<td>' + roleBadge(u.role) + '</td>'
+          + '<td>' + fmtNum(u.credits) + '</td>'
+          + '<td>' + statusBadge(u.status) + '</td>'
+          + '<td>' + fmtTime(u.created_at) + '</td>'
+          + '<td>' + fmtTime(u.last_login_at) + '</td>'
+          + '<td><div class="actions-cell">'
+          + '<button class="btn btn-outline btn-sm" onclick="showUserDetail(\'' + u.id + '\')">详情</button>'
+          + '<button class="btn btn-outline btn-sm" onclick="showEditRole(\'' + u.id + '\',\'' + u.role + '\')">角色</button>'
+          + '<button class="btn btn-outline btn-sm" onclick="showEditCredits(\'' + u.id + '\',' + u.credits + ')">积分</button>'
+          + (u.status === 'active'
+            ? '<button class="btn btn-danger btn-sm" onclick="banUser(\'' + u.id + '\')">封禁</button>'
+            : '<button class="btn btn-outline btn-sm" onclick="unbanUser(\'' + u.id + '\')">解封</button>')
+          + '</div></td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    // filters binding
+    document.getElementById('user-search').addEventListener('input', debounce(function() {
+      usersState.search = this.value; usersState.page = 1; renderUsers();
+    }, 400));
+    document.getElementById('user-role-filter').value = usersState.role;
+    document.getElementById('user-role-filter').addEventListener('change', function() {
+      usersState.role = this.value; usersState.page = 1; renderUsers();
+    });
+    document.getElementById('user-status-filter').value = usersState.status;
+    document.getElementById('user-status-filter').addEventListener('change', function() {
+      usersState.status = this.value; usersState.page = 1; renderUsers();
+    });
+
+    // pagination
+    bindPagination('users-page', function(page) { usersState.page = page; renderUsers(); });
+
+  } catch (e) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>加载失败: ' + esc(e.message) + '</p></div>';
+  }
+}
+
+async function showUserDetail(userId) {
+  try {
+    var res = await AdminAPI.getUserDetail(userId);
+    var u = res.data || {};
+    var html = '<h3>用户详情</h3>'
+      + '<div class="detail-grid">'
+      + detailItem('用户ID', u.id)
+      + detailItem('手机号', u.phone)
+      + detailItem('昵称', u.nickname || '-')
+      + detailItem('角色', u.role)
+      + detailItem('积分', fmtNum(u.credits))
+      + detailItem('状态', u.status)
+      + detailItem('创建时间', fmtTime(u.created_at))
+      + detailItem('最后登录', fmtTime(u.last_login_at))
+      + '</div>'
+      + '<div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">关闭</button></div>';
+    openModal(html);
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function showEditRole(userId, currentRole) {
+  var html = '<h3>修改角色</h3>'
+    + '<div class="form-group"><label>角色</label><select id="edit-role-select">'
+    + '<option value="free"' + (currentRole === 'free' ? ' selected' : '') + '>免费</option>'
+    + '<option value="pro"' + (currentRole === 'pro' ? ' selected' : '') + '>Pro</option>'
+    + '<option value="admin"' + (currentRole === 'admin' ? ' selected' : '') + '>管理员</option>'
+    + '</select></div>'
+    + '<div class="modal-actions">'
+    + '<button class="btn btn-outline" onclick="closeModal()">取消</button>'
+    + '<button class="btn btn-primary" id="save-role-btn">保存</button></div>';
+  openModal(html);
+  document.getElementById('save-role-btn').addEventListener('click', async function() {
+    var role = document.getElementById('edit-role-select').value;
+    this.disabled = true;
+    try {
+      await AdminAPI.updateUserRole(userId, role);
+      showToast('角色已更新', 'success');
+      closeModal();
+      renderUsers();
+    } catch (e) { showToast(e.message, 'error'); this.disabled = false; }
+  });
+}
+
+function showEditCredits(userId, currentCredits) {
+  var html = '<h3>修改积分</h3>'
+    + '<div class="form-group"><label>积分数量</label><input type="number" id="edit-credits-input" value="' + currentCredits + '" min="0"></div>'
+    + '<div class="modal-actions">'
+    + '<button class="btn btn-outline" onclick="closeModal()">取消</button>'
+    + '<button class="btn btn-primary" id="save-credits-btn">保存</button></div>';
+  openModal(html);
+  document.getElementById('save-credits-btn').addEventListener('click', async function() {
+    var credits = parseInt(document.getElementById('edit-credits-input').value) || 0;
+    this.disabled = true;
+    try {
+      await AdminAPI.updateUserCredits(userId, credits);
+      showToast('积分已更新', 'success');
+      closeModal();
+      renderUsers();
+    } catch (e) { showToast(e.message, 'error'); this.disabled = false; }
+  });
+}
+
+async function banUser(userId) {
+  if (!confirm('确认封禁该用户？')) return;
+  try {
+    await AdminAPI.updateUserStatus(userId, 'banned');
+    showToast('用户已封禁', 'success');
+    renderUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function unbanUser(userId) {
+  if (!confirm('确认解封该用户？')) return;
+  try {
+    await AdminAPI.updateUserStatus(userId, 'active');
+    showToast('用户已解封', 'success');
+    renderUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ==================== 订阅管理 ====================
+var subsState = { page: 1, pageSize: 20, status: '', user_id: '' };
+
+async function renderSubscriptions() {
+  var content = document.getElementById('content');
+  content.innerHTML = '<div class="loading">加载中...</div>';
+  try {
+    var res = await AdminAPI.listSubscriptions(subsState);
+    var data = res.data || {};
+    var subs = data.items || [];
+    var p = data.pagination || {};
+    content.innerHTML = ''
+      + '<div class="page-header"><h1>订阅管理</h1></div>'
+      + '<div class="filters-bar">'
+      + '<select id="sub-status-filter"><option value="">全部状态</option><option value="active">活跃</option><option value="expired">已过期</option><option value="cancelled">已取消</option></select>'
+      + '</div>'
+      + '<table class="data-table"><thead><tr>'
+      + th('用户ID') + th('方案') + th('状态') + th('到期时间') + th('自动续费') + th('创建时间')
+      + '</tr></thead><tbody id="subs-tbody"></tbody></table>'
+      + pagination(p.page, p.total_pages, 'subs-page');
+
+    var tbody = document.getElementById('subs-tbody');
+    if (subs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">暂无数据</div></td></tr>';
+    } else {
+      tbody.innerHTML = subs.map(function(s) {
+        return '<tr>'
+          + '<td><code style="font-size:11px">' + esc(s.user_id) + '</code></td>'
+          + '<td>' + esc(s.plan_id) + '</td>'
+          + '<td>' + statusBadge(s.status) + '</td>'
+          + '<td>' + fmtTime(s.expires_at) + '</td>'
+          + '<td>' + (s.auto_renew ? '✅' : '❌') + '</td>'
+          + '<td>' + fmtTime(s.created_at) + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    document.getElementById('sub-status-filter').value = subsState.status;
+    document.getElementById('sub-status-filter').addEventListener('change', function() {
+      subsState.status = this.value; subsState.page = 1; renderSubscriptions();
+    });
+    bindPagination('subs-page', function(page) { subsState.page = page; renderSubscriptions(); });
+
+  } catch (e) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>加载失败: ' + esc(e.message) + '</p></div>';
+  }
+}
+
+// ==================== 任务管理 ====================
+var tasksState = { page: 1, pageSize: 20, status: '', tool_type: '', date_from: '', date_to: '' };
+
+async function renderTasks() {
+  var content = document.getElementById('content');
+  content.innerHTML = '<div class="loading">加载中...</div>';
+  try {
+    var res = await AdminAPI.listTasks(tasksState);
+    var data = res.data || {};
+    var tasks = data.items || [];
+    var p = data.pagination || {};
+    content.innerHTML = ''
+      + '<div class="page-header"><h1>任务管理</h1></div>'
+      + '<div class="filters-bar">'
+      + '<select id="task-status-filter"><option value="">全部状态</option><option value="pending">等待</option><option value="processing">处理中</option><option value="completed">已完成</option><option value="failed">失败</option></select>'
+      + '<select id="task-type-filter"><option value="">全部类型</option>'
+      + '<option value="reshape">重塑</option><option value="hd_repair">高清修复</option><option value="obj_remove">物体消除</option><option value="bg_remove">背景移除</option>'
+      + '<option value="super_realistic">超级写实</option><option value="hair_dye">染发</option><option value="lip_plump">丰唇</option><option value="jawline">下颌</option>'
+      + '<option value="hair_smooth">发质顺滑</option><option value="hair_repair">发质修复</option><option value="proportion">比例</option><option value="leg_enhance">丰腿</option>'
+      + '<option value="muscle">肌肉</option><option value="muscle_enhance">肌肉增强</option><option value="ai_edit">AI编辑</option><option value="beauty">美颜</option>'
+      + '<option value="color_grade">调色</option><option value="filter">滤镜</option><option value="video_generate">图生视频</option>'
+      + '</select>'
+      + '</div>'
+      + '<table class="data-table"><thead><tr>'
+      + th('任务ID') + th('用户') + th('工具') + th('状态') + th('耗时') + th('积分') + th('创建时间')
+      + '</tr></thead><tbody id="tasks-tbody"></tbody></table>'
+      + pagination(p.page, p.total_pages, 'tasks-page');
+
+    var tbody = document.getElementById('tasks-tbody');
+    if (tasks.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">暂无数据</div></td></tr>';
+    } else {
+      tbody.innerHTML = tasks.map(function(t) {
+        var ms = t.processing_time_ms ? (t.processing_time_ms / 1000).toFixed(1) + 's' : '-';
+        return '<tr>'
+          + '<td><code style="font-size:11px">' + esc(t.id ? t.id.substring(0, 12) + '...' : '-') + '</code></td>'
+          + '<td>' + esc(t.user_id ? t.user_id.substring(0, 12) + '...' : '-') + '</td>'
+          + '<td>' + esc(t.tool_type) + '</td>'
+          + '<td>' + statusBadge(t.status) + '</td>'
+          + '<td>' + ms + '</td>'
+          + '<td>' + (t.credits_used || 0) + '</td>'
+          + '<td>' + fmtTime(t.created_at) + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    document.getElementById('task-status-filter').value = tasksState.status;
+    document.getElementById('task-status-filter').addEventListener('change', function() {
+      tasksState.status = this.value; tasksState.page = 1; renderTasks();
+    });
+    document.getElementById('task-type-filter').value = tasksState.tool_type;
+    document.getElementById('task-type-filter').addEventListener('change', function() {
+      tasksState.tool_type = this.value; tasksState.page = 1; renderTasks();
+    });
+    bindPagination('tasks-page', function(page) { tasksState.page = page; renderTasks(); });
+
+  } catch (e) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>加载失败: ' + esc(e.message) + '</p></div>';
+  }
+}
+
+// ==================== Modal ====================
+function openModal(html) {
+  document.getElementById('modal-content').innerHTML = html;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ==================== Pagination helpers ====================
+function pagination(page, total, id) {
+  if (!total || total <= 1) return '';
+  return '<div class="pagination" id="' + id + '">'
+    + '<button data-page="1"' + (page <= 1 ? ' disabled' : '') + '>首页</button>'
+    + '<button data-page="' + (page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>上一页</button>'
+    + '<span>第 ' + page + ' / ' + total + ' 页</span>'
+    + '<button data-page="' + (page + 1) + '"' + (page >= total ? ' disabled' : '') + '>下一页</button>'
+    + '<button data-page="' + total + '"' + (page >= total ? ' disabled' : '') + '>末页</button>'
+    + '</div>';
+}
+
+function bindPagination(id, callback) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.querySelectorAll('button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var page = parseInt(this.dataset.page);
+      if (page) callback(page);
+    });
+  });
+}
+
+function th(label, sortable) {
+  return '<th>' + esc(label) + '</th>';
+}
+
+// ==================== 工具函数 ====================
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escAttr(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function debounce(fn, ms) {
+  var timer;
+  return function() {
+    var ctx = this, args = arguments;
+    clearTimeout(timer);
+    timer = setTimeout(function() { fn.apply(ctx, args); }, ms);
+  };
+}
+
+// ==================== 初始化 ====================
+(function init() {
+  if (AdminAPI.getToken() && AdminAPI.getUser()) {
+    showMain();
+  }
+})();
+</script>
+
 </body>
 </html>

@@ -8,6 +8,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
 import { config } from './config';
 import { Redis } from 'ioredis';
 import path from 'path';
@@ -77,6 +78,15 @@ async function buildApp() {
   // --- 静态文件服务 (本地开发存储) ---
   const dataDir = path.resolve(config.dataDir);
   await mkdir(dataDir, { recursive: true });
+
+  // 注册 public 静态目录（管理后台等）
+  const publicDir = path.resolve(process.cwd(), 'public');
+  await mkdir(publicDir, { recursive: true });
+  await fastify.register(fastifyStatic, {
+    root: publicDir,
+    prefix: '/',
+    decorateReply: false,
+  });
 
   // 自定义静态文件路由
   fastify.get('/files/*', async (request, reply) => {
