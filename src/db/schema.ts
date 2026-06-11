@@ -197,3 +197,19 @@ export const plans = mysqlTable('plans', {
 });
 
 export type Plan = typeof plans.$inferSelect;
+
+// ==================== AI 模型配置表 ====================
+export const aiModelConfigs = mysqlTable('ai_model_configs', {
+  id: char('id', { length: 36 }).primaryKey().notNull(),
+  name: varchar('name', { length: 50 }).unique().notNull(),
+  displayName: varchar('display_name', { length: 100 }).notNull(),
+  endpoint: varchar('endpoint', { length: 500 }).notNull().default(''),
+  apiKey: varchar('api_key', { length: 200 }).notNull().default(''),
+  modelName: varchar('model_name', { length: 100 }).notNull().default(''),
+  isActive: boolean('is_active').default(true).notNull(),
+  extra: json('extra').$type<Record<string, unknown>>(),
+  createdAt: datetime('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: datetime('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type AiModelConfig = typeof aiModelConfigs.$inferSelect;

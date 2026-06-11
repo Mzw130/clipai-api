@@ -9,6 +9,7 @@
 import Replicate from 'replicate';
 import axios, { AxiosError } from 'axios';
 import { config } from '../../config';
+import { getModelConfig } from '../model-config';
 import { AITimeoutError, AIError } from '../../utils/errors';
 import { downloadFileToBuffer } from '../storage';
 
@@ -281,11 +282,13 @@ export async function generateVideo(
 export async function seedanceGenerateVideo(
   input: VideoGenerationInput,
 ): Promise<VideoGenerationOutput> {
-  const endpoint = config.ai.seedanceEndpoint;
-  const apiKey = config.ai.seedanceApiKey;
+  const cfg = getModelConfig('seedance');
+  const endpoint = cfg?.endpoint || config.ai.seedanceEndpoint;
+  const apiKey = cfg?.apiKey || config.ai.seedanceApiKey;
+  const model = cfg?.modelName || config.ai.seedanceModel;
 
   if (!endpoint || !apiKey) {
-    throw new AIError('Seedance 未配置 (SEEDANCE_ENDPOINT / SEEDANCE_API_KEY)');
+    throw new AIError('Seedance 未配置，请在管理后台设置 API Key');
   }
 
   const headers = {
@@ -335,7 +338,7 @@ export async function seedanceGenerateVideo(
     // 构建请求体 — 匹配官方 API 格式
     // 首帧图生视频: text 在前, image_url 在后, image_url 不需要 role
     const requestBody: Record<string, unknown> = {
-      model: config.ai.seedanceModel,
+      model,
       content: [
         {
           type: 'text',
@@ -360,7 +363,7 @@ export async function seedanceGenerateVideo(
     }
 
     // Step 1: 提交视频生成任务
-    console.log('[Seedance] 创建任务:', { model: config.ai.seedanceModel, ratio: videoRatio, duration: videoDuration, generateAudio });
+    console.log('[Seedance] 创建任务:', { model, ratio: videoRatio, duration: videoDuration, generateAudio });
     const createRes = await axios.post(endpoint, requestBody, { timeout: 30_000, headers });
 
     // 官方响应格式: { "id": "cgt-2025******-****" }
@@ -452,11 +455,13 @@ export async function seedanceGenerateVideo(
 export async function seedreamGenerateImage(
   input: ImageGenerationInput,
 ): Promise<ImageGenerationOutput> {
-  const endpoint = config.ai.seedreamEndpoint;
-  const apiKey = config.ai.seedreamApiKey;
+  const cfg = getModelConfig('seedream');
+  const endpoint = cfg?.endpoint || config.ai.seedreamEndpoint;
+  const apiKey = cfg?.apiKey || config.ai.seedreamApiKey;
+  const model = cfg?.modelName || config.ai.seedreamModel;
 
   if (!endpoint || !apiKey) {
-    throw new AIError('Seedream 未配置 (SEEDREAM_ENDPOINT / SEEDREAM_API_KEY)');
+    throw new AIError('Seedream 未配置，请在管理后台设置 API Key');
   }
 
   const headers = {
@@ -481,7 +486,7 @@ export async function seedreamGenerateImage(
 
     // 构建请求体 — 匹配官方 API
     const requestBody: Record<string, unknown> = {
-      model: config.ai.seedreamModel,
+      model,
       prompt: input.prompt || '高质量图片，细节丰富，光线自然',
       size: (extra.size as string) || '2048x2048',
       sequential_image_generation: 'disabled',  // 单图模式
@@ -500,7 +505,7 @@ export async function seedreamGenerateImage(
       requestBody.output_format = extra.output_format;
     }
 
-    console.log('[Seedream] 请求生成:', { model: config.ai.seedreamModel, size: requestBody.size, hasImage: !!imageParam });
+    console.log('[Seedream] 请求生成:', { model, size: requestBody.size, hasImage: !!imageParam });
 
     const res = await axios.post(endpoint, requestBody, {
       timeout: 120_000,

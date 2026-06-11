@@ -21,6 +21,7 @@ import aiRoutes from './routes/ai';
 import materialsRoutes from './routes/materials';
 import paymentRoutes from './routes/payment';
 import contentRoutes from './routes/content';
+import adminRoutes from './routes/admin';
 
 // ==================== 初始化 ====================
 const fastify = Fastify({
@@ -138,6 +139,24 @@ async function buildApp() {
   await fastify.register(materialsRoutes);
   await fastify.register(paymentRoutes);
   await fastify.register(contentRoutes);
+  await fastify.register(adminRoutes);
+
+  // --- Admin 管理后台静态文件 ---
+  const adminDir = path.join(__dirname, '..', 'public', 'admin');
+  if (existsSync(adminDir)) {
+    await fastify.register(import('@fastify/static'), {
+      root: adminDir,
+      prefix: '/admin/',
+      wildcard: true,
+    });
+
+    // SPA fallback: /admin 和 /admin/{hash路由} 都返回 index.html
+    fastify.get('/admin', async (_request, reply) => {
+      return reply.sendFile('index.html');
+    });
+
+    fastify.log.info(`🖥️  Admin 管理后台: http://localhost:${config.port}/admin`);
+  }
 
   // --- 全局错误处理 ---
   fastify.setErrorHandler((error, _request, reply) => {

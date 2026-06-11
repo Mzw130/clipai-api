@@ -237,6 +237,7 @@ export async function enhanceImage(
       userId,
       type: toolConfig.isVideo ? 'video' : 'image',
       url: resultUrl,
+      thumbnailUrl: toolConfig.isVideo ? originalUrl : null,
       toolType: request.toolType,
       taskId,
     });

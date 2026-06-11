@@ -3,10 +3,11 @@
  *
  * POST /api/v1/ai/enhance         — 统一 AI 图片处理
  * GET  /api/v1/ai/status/:taskId  — 查询任务状态
- * POST /api/v1/ai/video           — 图生视频
+ * POST /api/v1/ai/video           — 图生视频（同步 Seedance）
  */
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { v4 as uuidv4 } from 'uuid';
 import { authGuard, proGuard } from '../middleware/auth';
 import { validateBody } from '../middleware/validator';
 import { enhanceImage, getTaskStatus, EnhanceRequest } from '../services/ai/pipeline';
@@ -17,17 +18,14 @@ import { success, error, ErrorCode } from '../utils/response';
 import { AppError } from '../utils/errors';
 import { getSubscriptionStatus } from '../services/payment';
 import { config } from '../config';
+import { uploadToOSS, downloadFileToBuffer } from '../services/storage';
+import { seedanceGenerateVideo } from '../services/ai/models';
 
 // ==================== Zod Schemas ====================
 const enhanceBodySchema = z.object({
   tool_type: z.string().min(1, 'tool_type 不能为空'),
   params: z.record(z.unknown()).optional().default({}),
   webhook_url: z.string().url().optional(),
-});
-
-const videoBodySchema = z.object({
-  prompt: z.string().optional(),
-  mode: z.enum(['super', 'custom']).default('super'),
 });
 
 export default async function aiRoutes(fastify: FastifyInstance) {
@@ -255,60 +253,85 @@ export default async function aiRoutes(fastify: FastifyInstance) {
   /**
    * POST /api/v1/ai/video
    * 图生视频（需要 Pro 会员）
+   * 直接同步调用 Seedance，等待完成，结果入库后返回
    */
   fastify.post(
     '/api/v1/ai/video',
-    { preHandler: [proGuard, validateBody(videoBodySchema)] },
+    { preHandler: [proGuard] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
+        const userId = request.userId!;
+
         // 检查 Pro 状态
-        const subStatus = await getSubscriptionStatus(request.userId!);
+        const subStatus = await getSubscriptionStatus(userId);
         if (!subStatus.isPro) {
           return reply.status(403).send(error(ErrorCode.PRO_REQUIRED));
         }
 
+        // 解析 multipart
         const data = await request.file();
         if (!data) {
           return reply.status(400).send(error(ErrorCode.PARAM_ERROR, '请上传图片'));
         }
-
         const imageBuffer = await data.toBuffer();
-        const { prompt, mode } = request.body as z.infer<typeof videoBodySchema>;
+        const fields = (request.body as Record<string, unknown>) || {};
+        const prompt = String(fields.prompt || '');
+        const mode = String(fields.mode || 'super');
 
-        const videoRequest: EnhanceRequest = {
+        // 上传原图
+        const uploadKey = `uploads/${userId}/${uuidv4()}.png`;
+        const originalUrl = await uploadToOSS(uploadKey, imageBuffer, 'image/png');
+
+        // 扣积分
+        const creditCost = 8;
+
+        // 调用 Seedance，同步等待（最多 5 分钟）
+        fastify.log.info(`[Video] 开始 Seedance 视频生成, userId=${userId}`);
+        const videoResult = await seedanceGenerateVideo({
+          imageUrl: originalUrl,
+          prompt: prompt || undefined,
+          extra: { mode },
+        });
+        fastify.log.info(`[Video] Seedance 完成: ${videoResult.videoUrl}`);
+
+        // 下载视频 → 上传到本地存储
+        const videoBuffer = await downloadFileToBuffer(videoResult.videoUrl);
+        const videoKey = `results/${userId}/${uuidv4()}.mp4`;
+        const resultUrl = await uploadToOSS(videoKey, videoBuffer, 'video/mp4');
+
+        // 入库：tasks + materials
+        const taskId = uuidv4();
+        await db.insert(schema.tasks).values({
+          id: taskId,
+          userId,
           toolType: 'video_generate',
-          imageBuffer,
-          imageFileName: data.filename || 'image.png',
-          imageMimeType: data.mimetype || 'image/png',
-          params: {
-            prompt,
-            mode,
-          },
-        };
+          status: 'completed',
+          originalUrl,
+          resultUrl,
+          creditsUsed: creditCost,
+          modelUsed: config.ai.seedanceModel,
+          completedAt: new Date(),
+        });
 
-        const result = await enhanceImage(request.userId!, videoRequest);
+        await db.insert(schema.materials).values({
+          id: uuidv4(),
+          userId,
+          type: 'video',
+          url: resultUrl,
+          thumbnailUrl: originalUrl,
+          toolType: 'video_generate',
+          taskId,
+          sizeBytes: videoBuffer.length,
+        });
 
-        if (result.status === 'processing') {
-          return reply.send(
-            success({
-              task_id: result.taskId,
-              status: result.status,
-              estimated_seconds: result.estimatedSeconds,
-            }),
-          );
-        }
-
-        return reply.send(
-          success({
-            task_id: result.taskId,
-            status: result.status,
-            result_url: result.resultUrl,
-            processing_time_ms: result.processingTimeMs,
-            credits_used: result.creditsUsed,
-          }),
-        );
+        return reply.send(success({
+          task_id: taskId,
+          status: 'completed',
+          result_url: resultUrl,
+          credits_used: creditCost,
+        }));
       } catch (err) {
-        console.error('[Video Route] 处理失败:', err);
+        fastify.log.error('[Video Route] 处理失败:', err);
         if (err instanceof AppError) {
           return reply.status(err.httpStatus).send(error(err.code, err.message));
         }

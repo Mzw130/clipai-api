@@ -153,10 +153,6 @@ Subject must remain fully intact with original colors and lighting.`,
     estimatedSeconds: 15,
     creditCost: 3,
   },
-    defaultParams: {},
-    estimatedSeconds: 10,
-    creditCost: 2,
-  },
 
   // ==================== 6. 染发 (hair_dye) ====================
   hair_dye: {
@@ -324,12 +320,6 @@ Professional fitness photography quality. 8K photorealistic.`,
     },
     estimatedSeconds: 15,
     creditCost: 3,
-  },
-    defaultParams: {
-      prompt: '',
-    },
-    estimatedSeconds: 10,
-    creditCost: 2,
   },
 
   // ==================== 16. 美颜 (beauty) ====================

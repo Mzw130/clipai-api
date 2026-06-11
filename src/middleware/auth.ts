@@ -60,11 +60,20 @@ export async function authGuard(request: FastifyRequest, reply: FastifyReply) {
 }
 
 /**
- * Pro 会员鉴权中间件 —— 要求 Pro 角色
+ * Pro 会员鉴权中间件 —— 要求 Pro 或 Admin 角色
  */
 export async function proGuard(request: FastifyRequest, reply: FastifyReply) {
   if (request.userRole !== 'pro' && request.userRole !== 'admin') {
     return reply.status(403).send(error(ErrorCode.PRO_REQUIRED));
+  }
+}
+
+/**
+ * Admin 鉴权中间件 —— 仅限 Admin 角色
+ */
+export async function adminGuard(request: FastifyRequest, reply: FastifyReply) {
+  if (request.userRole !== 'admin') {
+    return reply.status(403).send(error(ErrorCode.FORBIDDEN, '无权限访问，仅限管理员'));
   }
 }
 
