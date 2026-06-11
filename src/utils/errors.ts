@@ -46,6 +46,12 @@ export class FormatNotSupportedError extends AppError {
   }
 }
 
+export class ForbiddenError extends AppError {
+  constructor(message: string = '无权限访问') {
+    super(1007, message, 403);
+  }
+}
+
 export class AITimeoutError extends AppError {
   constructor(message: string = 'AI 服务超时') {
     super(2001, message, 504);
