@@ -8,6 +8,11 @@ import { z } from 'zod';
 import { authGuard, adminGuard } from '../middleware/auth';
 import {
   getStats,
+  getTaskDistribution,
+  getDailyTrends,
+  getUserGrowth,
+  getRevenueBreakdown,
+  getToolUsageRanking,
   listUsers,
   getUserDetail,
   updateUserRole,
@@ -60,6 +65,14 @@ const tasksQuerySchema = z.object({
   date_to: z.string().optional(),
 });
 
+const analyticsQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).optional().default(30),
+});
+
+const revenueAnalyticsQuerySchema = z.object({
+  months: z.coerce.number().int().min(1).max(36).optional().default(12),
+});
+
 export default async function adminRoutes(fastify: FastifyInstance) {
   // 全局需要登录
   fastify.addHook('preHandler', authGuard);
@@ -77,6 +90,101 @@ export default async function adminRoutes(fastify: FastifyInstance) {
           return reply.status(err.httpStatus).send(error(err.code as ErrorCode, err.message));
         }
         fastify.log.error('[Admin] 获取统计失败:', err);
+        return reply.status(500).send(error(ErrorCode.INTERNAL_ERROR));
+      }
+    },
+  );
+
+  // ==================== 分析：任务分布 ====================
+  fastify.get(
+    '/api/v1/admin/analytics/task-distribution',
+    { preHandler: [adminGuard] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const query = analyticsQuerySchema.parse(request.query);
+        const data = await getTaskDistribution(query.days);
+        return reply.send(success(data));
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          return reply.status(400).send(error(ErrorCode.PARAM_ERROR, '参数错误'));
+        }
+        fastify.log.error('[Admin] 获取任务分布失败:', err);
+        return reply.status(500).send(error(ErrorCode.INTERNAL_ERROR));
+      }
+    },
+  );
+
+  // ==================== 分析：每日趋势 ====================
+  fastify.get(
+    '/api/v1/admin/analytics/daily-trends',
+    { preHandler: [adminGuard] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const query = analyticsQuerySchema.parse(request.query);
+        const data = await getDailyTrends(query.days);
+        return reply.send(success(data));
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          return reply.status(400).send(error(ErrorCode.PARAM_ERROR, '参数错误'));
+        }
+        fastify.log.error('[Admin] 获取每日趋势失败:', err);
+        return reply.status(500).send(error(ErrorCode.INTERNAL_ERROR));
+      }
+    },
+  );
+
+  // ==================== 分析：用户增长 ====================
+  fastify.get(
+    '/api/v1/admin/analytics/user-growth',
+    { preHandler: [adminGuard] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const query = analyticsQuerySchema.parse(request.query);
+        const data = await getUserGrowth(query.days);
+        return reply.send(success(data));
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          return reply.status(400).send(error(ErrorCode.PARAM_ERROR, '参数错误'));
+        }
+        fastify.log.error('[Admin] 获取用户增长失败:', err);
+        return reply.status(500).send(error(ErrorCode.INTERNAL_ERROR));
+      }
+    },
+  );
+
+  // ==================== 分析：收入细分 ====================
+  fastify.get(
+    '/api/v1/admin/analytics/revenue-breakdown',
+    { preHandler: [adminGuard] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const query = revenueAnalyticsQuerySchema.parse(request.query);
+        const data = await getRevenueBreakdown(query.months);
+        return reply.send(success(data));
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          return reply.status(400).send(error(ErrorCode.PARAM_ERROR, '参数错误'));
+        }
+        fastify.log.error('[Admin] 获取收入细分失败:', err);
+        return reply.status(500).send(error(ErrorCode.INTERNAL_ERROR));
+      }
+    },
+  );
+
+  // ==================== 分析：工具使用排名 ====================
+  fastify.get(
+    '/api/v1/admin/analytics/tool-usage-ranking',
+    { preHandler: [adminGuard] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const query = analyticsQuerySchema.parse(request.query);
+        const data = await getToolUsageRanking(query.days);
+        return reply.send(success(data));
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          return reply.status(400).send(error(ErrorCode.PARAM_ERROR, '参数错误'));
+        }
+        fastify.log.error('[Admin] 获取工具排名失败:', err);
         return reply.status(500).send(error(ErrorCode.INTERNAL_ERROR));
       }
     },

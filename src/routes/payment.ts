@@ -18,6 +18,7 @@ import {
 } from '../services/payment';
 import { success, error, ErrorCode } from '../utils/response';
 import { AppError } from '../utils/errors';
+import { trackSubscriptionStart } from '../services/tracker';
 
 const verifyReceiptSchema = z.object({
   receipt_data: z.string().min(1, 'receipt_data 不能为空'),
@@ -56,6 +57,11 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
         const userId = request.userId!;
 
         const result = await verifyAppleReceipt(userId, receipt_data);
+
+        // 服务端埋点：订阅开始
+        if (result.success && result.planId) {
+          trackSubscriptionStart(userId, result.planId);
+        }
 
         return reply.send(
           success({

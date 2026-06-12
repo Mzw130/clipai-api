@@ -11,11 +11,53 @@ import { AppError, ForbiddenError } from '../utils/errors';
 export interface AdminStats {
   total_users: number;
   active_users_today: number;
+  today_new_users: number;
   total_pro_users: number;
   total_tasks: number;
   tasks_today: number;
+  pending_tasks: number;
+  processing_tasks: number;
+  completed_tasks: number;
+  failed_tasks: number;
+  total_materials: number;
   total_revenue: string;
   revenue_this_month: string;
+}
+
+export interface TaskDistribution {
+  tool_type: string;
+  count: number;
+  success_count: number;
+  failed_count: number;
+  avg_processing_ms: number;
+  total_credits: number;
+}
+
+export interface DailyTrend {
+  date: string;
+  new_users: number;
+  tasks: number;
+  revenue: string;
+}
+
+export interface UserGrowthPoint {
+  date: string;
+  cumulative: number;
+  daily_new: number;
+}
+
+export interface RevenueBreakdown {
+  month: string;
+  plan_name: string;
+  count: number;
+  revenue: string;
+}
+
+export interface ToolUsageRanking {
+  tool_type: string;
+  count: number;
+  credits: number;
+  success_rate: number;
 }
 
 export interface UserFilters {
@@ -47,7 +89,9 @@ export interface TaskFilters {
 
 // ==================== 统计 ====================
 export async function getStats(): Promise<AdminStats> {
-  const [totalUsers, activeToday, totalPro, totalTasks, tasksToday, revenue, revenueMonth] =
+  const [totalUsers, activeToday, todayNew, totalPro, totalTasks, tasksToday,
+    pendingTasks, processingTasks, completedTasks, failedTasks, totalMaterials,
+    revenue, revenueMonth] =
     await Promise.all([
       // 总用户数
       db
@@ -60,6 +104,13 @@ export async function getStats(): Promise<AdminStats> {
         .select({ count: sql<number>`COUNT(*)` })
         .from(schema.users)
         .where(sql`DATE(${schema.users.lastLoginAt}) = CURDATE()`)
+        .then((r) => r[0]?.count || 0),
+
+      // 今日新增
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(schema.users)
+        .where(sql`DATE(${schema.users.createdAt}) = CURDATE()`)
         .then((r) => r[0]?.count || 0),
 
       // Pro 用户数
@@ -80,6 +131,18 @@ export async function getStats(): Promise<AdminStats> {
         .select({ count: sql<number>`COUNT(*)` })
         .from(schema.tasks)
         .where(sql`DATE(${schema.tasks.createdAt}) = CURDATE()`)
+        .then((r) => r[0]?.count || 0),
+
+      // 各状态任务数
+      db.select({ count: sql<number>`COUNT(*)` }).from(schema.tasks).where(eq(schema.tasks.status, 'pending')).then((r) => r[0]?.count || 0),
+      db.select({ count: sql<number>`COUNT(*)` }).from(schema.tasks).where(eq(schema.tasks.status, 'processing')).then((r) => r[0]?.count || 0),
+      db.select({ count: sql<number>`COUNT(*)` }).from(schema.tasks).where(eq(schema.tasks.status, 'completed')).then((r) => r[0]?.count || 0),
+      db.select({ count: sql<number>`COUNT(*)` }).from(schema.tasks).where(eq(schema.tasks.status, 'failed')).then((r) => r[0]?.count || 0),
+
+      // 总素材数
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(schema.materials)
         .then((r) => r[0]?.count || 0),
 
       // 总收入
@@ -108,12 +171,183 @@ export async function getStats(): Promise<AdminStats> {
   return {
     total_users: totalUsers,
     active_users_today: activeToday,
+    today_new_users: todayNew,
     total_pro_users: totalPro,
     total_tasks: totalTasks,
     tasks_today: tasksToday,
+    pending_tasks: pendingTasks,
+    processing_tasks: processingTasks,
+    completed_tasks: completedTasks,
+    failed_tasks: failedTasks,
+    total_materials: totalMaterials,
     total_revenue: revenue,
     revenue_this_month: revenueMonth,
   };
+}
+
+// ==================== 分析：任务分布 ====================
+export async function getTaskDistribution(days: number = 30): Promise<TaskDistribution[]> {
+  const rows = await db
+    .select({
+      tool_type: schema.tasks.toolType,
+      count: sql<number>`COUNT(*)`,
+      success_count: sql<number>`SUM(CASE WHEN ${schema.tasks.status} = 'completed' THEN 1 ELSE 0 END)`,
+      failed_count: sql<number>`SUM(CASE WHEN ${schema.tasks.status} = 'failed' THEN 1 ELSE 0 END)`,
+      avg_processing_ms: sql<number>`COALESCE(ROUND(AVG(${schema.tasks.processingTimeMs})), 0)`,
+      total_credits: sql<number>`COALESCE(SUM(${schema.tasks.creditsUsed}), 0)`,
+    })
+    .from(schema.tasks)
+    .where(sql`${schema.tasks.createdAt} >= DATE_SUB(CURDATE(), INTERVAL ${days} DAY)`)
+    .groupBy(schema.tasks.toolType)
+    .orderBy(sql`COUNT(*) DESC`);
+
+  return rows.map((r) => ({
+    tool_type: r.tool_type,
+    count: Number(r.count),
+    success_count: Number(r.success_count),
+    failed_count: Number(r.failed_count),
+    avg_processing_ms: Number(r.avg_processing_ms),
+    total_credits: Number(r.total_credits),
+  }));
+}
+
+// ==================== 分析：每日趋势 ====================
+export async function getDailyTrends(days: number = 30): Promise<DailyTrend[]> {
+  // 生成日期序列
+  const dateSeries = Array.from({ length: days }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (days - 1 - i));
+    return d.toISOString().slice(0, 10);
+  });
+
+  // 并行查询
+  const [newUsersRows, tasksRows, revenueRows] = await Promise.all([
+    db
+      .select({
+        date: sql<string>`DATE(${schema.users.createdAt})`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(schema.users)
+      .where(sql`${schema.users.createdAt} >= DATE_SUB(CURDATE(), INTERVAL ${days} DAY)`)
+      .groupBy(sql`DATE(${schema.users.createdAt})`),
+
+    db
+      .select({
+        date: sql<string>`DATE(${schema.tasks.createdAt})`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(schema.tasks)
+      .where(sql`${schema.tasks.createdAt} >= DATE_SUB(CURDATE(), INTERVAL ${days} DAY)`)
+      .groupBy(sql`DATE(${schema.tasks.createdAt})`),
+
+    db
+      .select({
+        date: sql<string>`DATE(${schema.subscriptions.createdAt})`,
+        total: sql<string>`COALESCE(SUM(${schema.plans.price}), 0)`,
+      })
+      .from(schema.subscriptions)
+      .innerJoin(schema.plans, eq(schema.subscriptions.planId, schema.plans.productId))
+      .where(and(
+        eq(schema.subscriptions.status, 'active'),
+        sql`${schema.subscriptions.createdAt} >= DATE_SUB(CURDATE(), INTERVAL ${days} DAY)`,
+      ))
+      .groupBy(sql`DATE(${schema.subscriptions.createdAt})`),
+  ]);
+
+  // 索引查找
+  const newUsersMap = new Map(newUsersRows.map((r) => [r.date, Number(r.count)]));
+  const tasksMap = new Map(tasksRows.map((r) => [r.date, Number(r.count)]));
+  const revenueMap = new Map(revenueRows.map((r) => [r.date, r.total]));
+
+  return dateSeries.map((date) => ({
+    date,
+    new_users: newUsersMap.get(date) || 0,
+    tasks: tasksMap.get(date) || 0,
+    revenue: revenueMap.get(date) || '0',
+  }));
+}
+
+// ==================== 分析：用户增长 ====================
+export async function getUserGrowth(days: number = 30): Promise<UserGrowthPoint[]> {
+  const rows = await db
+    .select({
+      date: sql<string>`DATE(${schema.users.createdAt})`,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(schema.users)
+    .where(sql`${schema.users.createdAt} >= DATE_SUB(CURDATE(), INTERVAL ${days} DAY)`)
+    .groupBy(sql`DATE(${schema.users.createdAt})`)
+    .orderBy(sql`DATE(${schema.users.createdAt}) ASC`);
+
+  const dateSeries = Array.from({ length: days }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (days - 1 - i));
+    return d.toISOString().slice(0, 10);
+  });
+
+  const dailyMap = new Map(rows.map((r) => [r.date, Number(r.count)]));
+
+  // 获取起始日期之前的总用户数
+  const startDate = dateSeries[0];
+  const [beforeResult] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(schema.users)
+    .where(sql`DATE(${schema.users.createdAt}) < ${startDate}`);
+  let cumulative = beforeResult?.count || 0;
+
+  return dateSeries.map((date) => {
+    const dailyNew = dailyMap.get(date) || 0;
+    cumulative += dailyNew;
+    return { date, cumulative, daily_new: dailyNew };
+  });
+}
+
+// ==================== 分析：收入细分 ====================
+export async function getRevenueBreakdown(months: number = 12): Promise<RevenueBreakdown[]> {
+  const rows = await db
+    .select({
+      month: sql<string>`DATE_FORMAT(${schema.subscriptions.createdAt}, '%Y-%m')`,
+      plan_name: schema.plans.name,
+      count: sql<number>`COUNT(*)`,
+      revenue: sql<string>`COALESCE(SUM(${schema.plans.price}), 0)`,
+    })
+    .from(schema.subscriptions)
+    .innerJoin(schema.plans, eq(schema.subscriptions.planId, schema.plans.productId))
+    .where(and(
+      eq(schema.subscriptions.status, 'active'),
+      sql`${schema.subscriptions.createdAt} >= DATE_SUB(CURDATE(), INTERVAL ${months} MONTH)`,
+    ))
+    .groupBy(sql`DATE_FORMAT(${schema.subscriptions.createdAt}, '%Y-%m')`, schema.plans.name)
+    .orderBy(sql`DATE_FORMAT(${schema.subscriptions.createdAt}, '%Y-%m') ASC`);
+
+  return rows.map((r) => ({
+    month: r.month,
+    plan_name: r.plan_name,
+    count: Number(r.count),
+    revenue: r.revenue,
+  }));
+}
+
+// ==================== 分析：工具使用排名 ====================
+export async function getToolUsageRanking(days: number = 30): Promise<ToolUsageRanking[]> {
+  const rows = await db
+    .select({
+      tool_type: schema.tasks.toolType,
+      count: sql<number>`COUNT(*)`,
+      credits: sql<number>`COALESCE(SUM(${schema.tasks.creditsUsed}), 0)`,
+      success_count: sql<number>`SUM(CASE WHEN ${schema.tasks.status} = 'completed' THEN 1 ELSE 0 END)`,
+    })
+    .from(schema.tasks)
+    .where(sql`${schema.tasks.createdAt} >= DATE_SUB(CURDATE(), INTERVAL ${days} DAY)`)
+    .groupBy(schema.tasks.toolType)
+    .orderBy(sql`COUNT(*) DESC`);
+
+  return rows.map((r) => ({
+    tool_type: r.tool_type,
+    count: Number(r.count),
+    credits: Number(r.credits),
+    success_rate: r.count > 0 ? Math.round((Number(r.success_count) / Number(r.count)) * 10000) / 100 : 0,
+  }));
 }
 
 // ==================== 用户管理 ====================

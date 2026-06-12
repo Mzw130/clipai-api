@@ -8,6 +8,10 @@ const Router = (() => {
     '/tasks': TasksView,
     '/subscriptions': SubscriptionsView,
     '/models': ModelsView,
+    '/analytics/tasks': TaskAnalyticsView,
+    '/analytics/trends': TrendAnalyticsView,
+    '/analytics/revenue': RevenueAnalyticsView,
+    '/analytics/funnel': AnalyticsFunnelView,
     '/login': LoginView,
   };
 
@@ -65,6 +69,7 @@ const Router = (() => {
 
     // 其他页面：隐藏登录容器，显示正常布局
     if (loginContainer) loginContainer.style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
     if (sidebar) sidebar.style.display = '';
     if (mainArea) mainArea.style.display = '';
 
@@ -86,6 +91,10 @@ const Router = (() => {
       '/tasks': '📋 任务列表',
       '/subscriptions': '💳 订阅管理',
       '/models': '⚙️ 模型配置',
+      '/analytics/tasks': '📊 任务分析',
+      '/analytics/trends': '📈 趋势图表',
+      '/analytics/revenue': '💰 收入分析',
+      '/analytics/funnel': '🔽 转化漏斗',
     };
     return titles[hash] || '';
   }

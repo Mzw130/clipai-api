@@ -10,6 +10,7 @@ import { validateBody } from '../middleware/validator';
 import { sendVerificationCode, loginWithCode } from '../services/auth';
 import { success, error, ErrorCode } from '../utils/response';
 import { AppError } from '../utils/errors';
+import { trackSignup, trackLogin } from '../services/tracker';
 
 // ==================== Zod Schemas ====================
 const sendCodeSchema = z.object({
@@ -60,6 +61,13 @@ export default async function authRoutes(fastify: FastifyInstance) {
         const redis = (fastify as any).redis;
 
         const result = await loginWithCode(phone, code, redis);
+
+        // 服务端埋点：登录/注册事件
+        if (result.user.isNewUser) {
+          trackSignup(result.user.id, phone);
+        } else {
+          trackLogin(result.user.id);
+        }
 
         return reply.send(
           success(

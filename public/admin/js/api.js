@@ -125,5 +125,26 @@ const AdminAPI = (() => {
       Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') qs.set(k, v); });
       return request('GET', '/admin/tasks?' + qs.toString());
     },
+
+    // Admin Analytics
+    async getTaskDistribution(days = 30) {
+      return request('GET', `/admin/analytics/task-distribution?days=${days}`);
+    },
+
+    async getDailyTrends(days = 30) {
+      return request('GET', `/admin/analytics/daily-trends?days=${days}`);
+    },
+
+    async getUserGrowth(days = 30) {
+      return request('GET', `/admin/analytics/user-growth?days=${days}`);
+    },
+
+    async getRevenueBreakdown(months = 12) {
+      return request('GET', `/admin/analytics/revenue-breakdown?months=${months}`);
+    },
+
+    async getToolUsageRanking(days = 30) {
+      return request('GET', `/admin/analytics/tool-usage-ranking?days=${days}`);
+    },
   };
 })();

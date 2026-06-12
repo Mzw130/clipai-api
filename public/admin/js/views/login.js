@@ -51,7 +51,7 @@ const LoginView = (() => {
                     <line x1="7" y1="13" x2="11" y2="13"/>
                   </svg>
                 </span>
-                <input type="text" id="login-phone" placeholder="管理员手机号" value="13800000000" autocomplete="off">
+                <input type="text" id="login-phone" placeholder="管理员手机号" value="13800138000" autocomplete="off">
               </div>
 
               <div class="input-group">
@@ -158,6 +158,7 @@ const LoginView = (() => {
           container.style.display = 'none';
 
           // 恢复布局并跳转
+          document.getElementById('app').style.display = 'flex';
           document.getElementById('sidebar').style.display = '';
           document.getElementById('main-area').style.display = '';
           window.location.hash = '#/dashboard';

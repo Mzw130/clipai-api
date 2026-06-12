@@ -30,6 +30,7 @@ import {
   InsufficientCreditsError,
 } from '../../utils/errors';
 import { ErrorCode } from '../../utils/response';
+import { trackAiTaskComplete, trackAiTaskFailed, trackMaterialSave } from '../tracker';
 
 // ==================== 类型定义 ====================
 export interface EnhanceRequest {
@@ -231,6 +232,9 @@ export async function enhanceImage(
 
     await deductCredits(userId, toolConfig.creditCost);
 
+    // 服务端埋点
+    trackAiTaskComplete(userId, request.toolType, toolConfig.creditCost, processingTimeMs);
+
     // Step 9: 录入素材库
     await db.insert(schema.materials).values({
       id: uuidv4(),
@@ -242,6 +246,9 @@ export async function enhanceImage(
       taskId,
     });
 
+    // 服务端埋点：素材保存
+    trackMaterialSave(userId, toolConfig.isVideo ? 'video' : 'image', request.toolType);
+
     return { taskId, status: 'completed', resultUrl, originalUrl, processingTimeMs, creditsUsed: toolConfig.creditCost };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'AI 处理失败';
@@ -250,6 +257,9 @@ export async function enhanceImage(
       errorMessage,
       completedAt: new Date(),
     }).where(eq(schema.tasks.id, taskId));
+
+    // 服务端埋点：任务失败
+    trackAiTaskFailed(userId, request.toolType, errorMessage);
 
     throw error instanceof AIError ? error : new AIError(errorMessage);
   }
@@ -298,6 +308,10 @@ async function processTaskAsync(
 
     await deductCredits(userId, toolConfig.creditCost);
 
+    // 服务端埋点
+    const asyncTime = Date.now() - startTime;
+    trackAiTaskComplete(userId, request.toolType, toolConfig.creditCost, asyncTime);
+
     await db.insert(schema.materials).values({
       id: uuidv4(),
       userId,
@@ -307,6 +321,8 @@ async function processTaskAsync(
       taskId,
       sizeBytes: resultBuffer.length,
     });
+
+    trackMaterialSave(userId, toolConfig.isVideo ? 'video' : 'image', request.toolType);
 
     console.log(`[Pipeline] 异步任务 ${taskId} 完成:`, {
       resultUrl,
@@ -327,6 +343,9 @@ async function processTaskAsync(
       errorMessage,
       completedAt: new Date(),
     }).where(eq(schema.tasks.id, taskId));
+
+    // 服务端埋点
+    trackAiTaskFailed(userId, request.toolType, errorMessage);
 
     if (request.webhookUrl) {
       sendWebhook(request.webhookUrl, { taskId, status: 'failed', errorMessage }).catch(() => {});

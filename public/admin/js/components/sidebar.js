@@ -14,6 +14,10 @@ const Sidebar = (() => {
       { href: '#/tasks', icon: '📋', label: '任务列表' },
       { href: '#/subscriptions', icon: '💳', label: '订阅管理' },
       { href: '#/models', icon: '⚙️', label: '模型配置' },
+      { href: '#/analytics/tasks', icon: '📊', label: '任务分析' },
+      { href: '#/analytics/funnel', icon: '🔽', label: '转化漏斗' },
+      { href: '#/analytics/trends', icon: '📈', label: '趋势图表' },
+      { href: '#/analytics/revenue', icon: '💰', label: '收入分析' },
     ];
 
     // 从 API 获取管理员实时信息
